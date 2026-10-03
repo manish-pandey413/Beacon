@@ -1,0 +1,32 @@
+services:
+  db:
+    container_name: webhook-platform-postgres
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: hp
+      POSTGRES_PASSWORD: password
+      PGDATA: /data/postgres
+      TZ: Asia/Kolkata
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - db:/data/postgres
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webhook -d webhook_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - db
+    restart: unless-stopped
+
+networks:
+  db:
+    driver: bridge
+
+volumes:
+  db:

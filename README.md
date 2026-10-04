@@ -4,53 +4,59 @@ This platform provides a centralized service for multi-tenant applications to de
 
 ## System Architecture
 
-The platform follows a layered architecture to ensure separation of concerns and maintainability.
+The platform is organized into three primary areas: Inbound API, Core Business Logic, and the Outbound Delivery Engine.
 
 ```mermaid
 graph TD
-    Client[Tenant Application]
-    API[REST API Controllers]
-    Service[Service Layer]
-    Security[Security & Crypto Utils]
-    Repo[Repository Layer]
-    DB[(PostgreSQL)]
-    Worker[Delivery Workers]
-    Receiver[Customer Webhook URL]
+    Tenant[Tenant Application] --> API[REST Controllers]
 
-    Client -->|API Key Auth| API
-    API --> Service
-    Service --> Security
-    Service --> Repo
-    Repo --> DB
-    Service -.->|Trigger| Worker
-    Worker -->|Signed Request| Receiver
+    subgraph Core [Platform Core]
+        API --> Service[Service Layer]
+        Service <--> Security[Security & Crypto]
+        Service <--> DB[(PostgreSQL)]
+    end
+
+    subgraph Delivery [Delivery Engine]
+        Service -.-> Dispatch[Dispatcher]
+        Dispatch --> Endpoint[Customer Endpoint]
+    end
+
+    %% Legend
+    style Core fill:none,stroke-dasharray: 5 5
+    style Delivery fill:none,stroke-dasharray: 5 5
 ```
 
 ## The Event Journey
 
-When an event occurs in your application, it moves through the following stages:
+This Data Flow Diagram (DFD) illustrates how data moves through the platform's components to ensure secure and reliable delivery.
 
 ```mermaid
-sequenceDiagram
-    participant App as Tenant Application
-    participant Platform as Webhook Platform
-    participant DB as Database
-    participant Rec as Customer Endpoint
+graph LR
+    %% External Entities
+    Tenant[Tenant Application]
+    Endpoint[Customer Endpoint]
 
-    App->>Platform: Trigger Event (POST /events)
-    Platform->>DB: Lookup Subscriptions
-    DB-->>Platform: Active Endpoints & Secrets
+    %% Processes
+    Auth((Authenticate))
+    Match((Match))
+    Sign((Sign))
+    Deliver((Deliver))
 
-    loop Each Subscription
-        Platform->>Platform: Sign Payload (AES-GCM Secret)
-        Platform->>Rec: Dispatch Webhook (HTTP POST)
+    %% Data Stores
+    Keys[(API Keys)]
+    Subs[(Subscriptions)]
+    Logs[(Logs)]
 
-        alt Success
-            Rec-->>Platform: 200 OK
-        else Failure
-            Platform->>Platform: Schedule Retry (Exponential Backoff)
-        end
-    end
+    %% Data Flows
+    Tenant -- "Event + API Key" --> Auth
+    Keys -- "Stored Hashes" --> Auth
+    Auth -- "Validated Event" --> Match
+    Subs -- "Endpoint Config" --> Match
+    Match -- "Payload + Secret" --> Sign
+    Sign -- "Signed Message" --> Deliver
+    Deliver -- "HTTP POST" --> Endpoint
+    Endpoint -- "HTTP Response" --> Deliver
+    Deliver -- "Delivery Record" --> Logs
 ```
 
 ## Core Capabilities
@@ -63,16 +69,6 @@ The platform is designed to manage the entire lifecycle of a webhook:
 - **Event Subscriptions:** Destinations can subscribe to specific types of events. This ensures that customers only receive the data they care about, reducing unnecessary traffic.
 - **Message Integrity:** Every webhook delivery is signed with a unique secret. This allows the receiver to verify that the message was sent by the platform and was not tampered with during delivery.
 - **Guaranteed Delivery:** The platform manages retries with an exponential backoff strategy. If a customer's server is temporarily down, the platform will keep trying until the message is delivered or the retry limit is reached.
-
-## The Event Journey
-
-When an event occurs in your application, the process is straightforward:
-
-1. **Trigger:** Your application sends an event to the platform.
-2. **Match:** The platform identifies which tenants and endpoints are subscribed to that specific event type.
-3. **Secure:** The platform signs the event payload using the destination's unique secret.
-4. **Deliver:** The platform attempts to send the event to the configured URL.
-5. **Retry:** If the delivery fails, the platform automatically schedules retries based on the endpoint's specific policy.
 
 ## Security and Privacy
 

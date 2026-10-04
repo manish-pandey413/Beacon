@@ -80,10 +80,57 @@ Security is built into the foundation of the platform:
 
 ## Getting Started
 
-To run the platform locally, you will need a relational database and a secret key used for encrypting stored secrets.
+Follow these steps to get the platform running in your local development environment.
 
-1. **Configure the Database:** Provide the connection details for your database in the application configuration.
-2. **Set the Encryption Key:** Supply a master encryption key through the environment. This key is vital for recovering encrypted secrets, so it must be protected and consistent across deployments.
-3. **Launch the Service:** Start the application using your preferred build tool. The service will automatically set up the necessary database tables on its first run.
+### Prerequisites
 
-The API is versioned to ensure stability as the platform evolves, with all current endpoints accessible under the primary version prefix.
+- **Java 21** or higher
+- **Maven 3.9+**
+- **Docker & Docker Compose** (for the database)
+
+### 1. Start the Database
+
+The platform requires a PostgreSQL database. You can start one quickly using the included Docker Compose file:
+
+```bash
+docker compose up -d
+```
+
+This will start a PostgreSQL instance on `localhost:5432` with the default credentials used in the application configuration.
+
+### 2. Configure the Environment
+
+The platform uses a master encryption key to secure webhook secrets at rest. This key must be a **Base64-encoded 32-byte string**. You can generate one using:
+
+```bash
+# Example: Generate a random 32-byte key in Base64
+openssl rand -base64 32
+```
+
+Set the key as an environment variable:
+
+```bash
+# For Unix/macOS
+export WEBHOOK_ENCRYPTION_KEY=your-base64-key-here
+
+# For Windows (PowerShell)
+$env:WEBHOOK_ENCRYPTION_KEY="your-base64-key-here"
+```
+
+### 3. Run the Application
+
+Start the Spring Boot application using Maven:
+
+```bash
+mvn spring-boot:run
+```
+
+Once the application starts, it will automatically run Flyway migrations to set up the database schema. The API will be available at `http://localhost:8080/v1`.
+
+### 4. Running Tests
+
+To ensure everything is set up correctly, run the test suite:
+
+```bash
+mvn test
+```

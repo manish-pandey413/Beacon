@@ -81,4 +81,43 @@ public class GlobalExceptionHandler {
             )
         );
     }
+
+    @ExceptionHandler(WebhookEndpointNotFoundException.class)
+    public ResponseEntity<ApiError> handleWebhookEndpointNotFound(
+        WebhookEndpointNotFoundException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+            new ApiError(
+                "WEBHOOK_ENDPOINT_NOT_FOUND",
+                exception.getMessage(),
+                Instant.now()
+            )
+        );
+    }
+
+    @ExceptionHandler(SubscriptionNotFoundException.class)
+    public ResponseEntity<ApiError> handleSubscriptionNotFound(
+        SubscriptionNotFoundException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+            new ApiError(
+                "SUBSCRIPTION_NOT_FOUND",
+                exception.getMessage(),
+                Instant.now()
+            )
+        );
+    }
+
+    @ExceptionHandler(SubscriptionAlreadyExistsException.class)
+    public ResponseEntity<ApiError> handleSubscriptionAlreadyExists(
+        SubscriptionAlreadyExistsException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+            new ApiError(
+                "SUBSCRIPTION_ALREADY_EXISTS",
+                exception.getMessage(),
+                Instant.now()
+            )
+        );
+    }
 }

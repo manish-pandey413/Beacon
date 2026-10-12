@@ -1,7 +1,6 @@
 package com.lowlifedev.webhook.util;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import com.lowlifedev.webhook.security.ApiKeyHasher;
 import java.security.SecureRandom;
 import java.util.Base64;
 import org.springframework.stereotype.Component;
@@ -12,6 +11,12 @@ public class ApiKeyGenerator {
     private static final String PREFIX = "wk_live_";
 
     private final SecureRandom secureRandom = new SecureRandom();
+
+    private final ApiKeyHasher apiKeyHasher;
+
+    public ApiKeyGenerator(ApiKeyHasher apiKeyHasher) {
+        this.apiKeyHasher = apiKeyHasher;
+    }
 
     public GeneratedApiKey generate() {
         byte[] randomBytes = new byte[32];
@@ -25,32 +30,9 @@ public class ApiKeyGenerator {
 
         String keyPrefix = rawKey.substring(0, Math.min(16, rawKey.length()));
 
-        String hash = sha256(rawKey);
+        String hash = apiKeyHasher.hash(rawKey);
 
         return new GeneratedApiKey(rawKey, keyPrefix, hash);
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-
-            byte[] hash = digest.digest(
-                value.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-            );
-
-            StringBuilder hex = new StringBuilder(hash.length * 2);
-
-            for (byte b : hash) {
-                hex.append(String.format("%02x", b));
-            }
-
-            return hex.toString();
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(
-                "SHA-256 is unavailable",
-                exception
-            );
-        }
     }
 
     public record GeneratedApiKey(

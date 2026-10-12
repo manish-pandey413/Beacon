@@ -133,4 +133,35 @@ public class GlobalExceptionHandler {
             )
         );
     }
+
+    @ExceptionHandler(InvalidApiKeyException.class)
+    public ResponseEntity<ApiError> handleInvalidApiKey(
+        InvalidApiKeyException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .header(
+                org.springframework.http.HttpHeaders.WWW_AUTHENTICATE,
+                "Bearer"
+            )
+            .body(
+                new ApiError(
+                    "INVALID_API_KEY",
+                    "Invalid or inactive API key",
+                    Instant.now()
+                )
+            );
+    }
+
+    @ExceptionHandler(InvalidEventPayloadException.class)
+    public ResponseEntity<ApiError> handleInvalidEventPayload(
+        InvalidEventPayloadException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            new ApiError(
+                "INVALID_EVENT_PAYLOAD",
+                exception.getMessage(),
+                Instant.now()
+            )
+        );
+    }
 }

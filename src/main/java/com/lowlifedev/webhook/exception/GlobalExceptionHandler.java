@@ -164,4 +164,30 @@ public class GlobalExceptionHandler {
             )
         );
     }
+
+    @ExceptionHandler(InvalidIdempotencyKeyException.class)
+    public ResponseEntity<ApiError> handleInvalidIdempotencyKey(
+        InvalidIdempotencyKeyException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            new ApiError(
+                "INVALID_IDEMPOTENCY_KEY",
+                exception.getMessage(),
+                Instant.now()
+            )
+        );
+    }
+
+    @ExceptionHandler(IdempotencyKeyReuseException.class)
+    public ResponseEntity<ApiError> handleIdempotencyKeyReuse(
+        IdempotencyKeyReuseException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+            new ApiError(
+                "IDEMPOTENCY_KEY_REUSED",
+                exception.getMessage(),
+                Instant.now()
+            )
+        );
+    }
 }

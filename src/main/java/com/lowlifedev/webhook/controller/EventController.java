@@ -29,13 +29,19 @@ public class EventController {
             name = "Authorization",
             required = false
         ) String authorizationHeader,
+        @RequestHeader(
+            name = "Idempotency-Key",
+            required = false
+        ) String idempotencyKey,
         @Valid @RequestBody EventIngestRequest request
     ) {
-        // Identify the tenant from the credential, not the body.
         var tenantId = authenticationService.authenticate(authorizationHeader);
 
-        // Persist the event and its matching deliveries.
-        EventIngestResponse response = eventService.ingest(tenantId, request);
+        EventIngestResponse response = eventService.ingest(
+            tenantId,
+            idempotencyKey,
+            request
+        );
 
         return ResponseEntity.accepted().body(response);
     }

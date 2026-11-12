@@ -5,12 +5,15 @@ import com.lowlifedev.webhook.dto.EventIngestResponse;
 import com.lowlifedev.webhook.exception.IdempotencyKeyReuseException;
 import com.lowlifedev.webhook.exception.InvalidEventPayloadException;
 import com.lowlifedev.webhook.exception.InvalidIdempotencyKeyException;
+import com.lowlifedev.webhook.messaging.DeliveryRequestedMessage;
 import com.lowlifedev.webhook.model.Delivery;
 import com.lowlifedev.webhook.model.Event;
 import com.lowlifedev.webhook.model.IdempotencyRecord;
+import com.lowlifedev.webhook.model.OutboxMessage;
 import com.lowlifedev.webhook.repository.DeliveryRepository;
 import com.lowlifedev.webhook.repository.EventRepository;
 import com.lowlifedev.webhook.repository.IdempotencyRecordRepository;
+import com.lowlifedev.webhook.repository.OutboxMessageRepository;
 import com.lowlifedev.webhook.repository.SubscriptionRepository;
 import com.lowlifedev.webhook.security.EventRequestHasher;
 import java.util.List;
@@ -30,13 +33,18 @@ public class EventService {
     private final EventRequestHasher requestHasher;
     private final ObjectMapper objectMapper;
 
+    private static final String DELIVERY_REQUESTS_TOPIC = "delivery-requests";
+
+    private final OutboxMessageRepository outboxRepository;
+
     public EventService(
         EventRepository eventRepository,
         DeliveryRepository deliveryRepository,
         SubscriptionRepository subscriptionRepository,
         IdempotencyRecordRepository idempotencyRepository,
         EventRequestHasher requestHasher,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        OutboxMessageRepository outboxRepository
     ) {
         this.eventRepository = eventRepository;
         this.deliveryRepository = deliveryRepository;
@@ -44,6 +52,7 @@ public class EventService {
         this.idempotencyRepository = idempotencyRepository;
         this.requestHasher = requestHasher;
         this.objectMapper = objectMapper;
+        this.outboxRepository = outboxRepository;
     }
 
     @Transactional
@@ -99,18 +108,57 @@ public class EventService {
         List<Delivery> deliveries = endpointIds
             .stream()
             .map(endpointId ->
-                new Delivery(tenantId, event.getId(), endpointId)
+                new Delivery(tenantId, savedEvent.getId(), endpointId)
             )
             .toList();
 
-        if (!deliveries.isEmpty()) {
-            deliveryRepository.saveAllAndFlush(deliveries);
+        List<Delivery> savedDeliveries = deliveries.isEmpty()
+            ? List.of()
+            : deliveryRepository.saveAllAndFlush(deliveries);
+
+        List<OutboxMessage> outboxMessages = savedDeliveries
+            .stream()
+            .map(delivery -> {
+                UUID messageId = UUID.randomUUID();
+
+                DeliveryRequestedMessage payload = new DeliveryRequestedMessage(
+                    messageId,
+                    "delivery.requested",
+                    1,
+                    tenantId,
+                    savedEvent.getId(),
+                    delivery.getId(),
+                    delivery.getEndpointId()
+                );
+
+                JsonNode payloadJson = objectMapper.valueToTree(payload);
+
+                String messageKey = createMessageKey(
+                    tenantId,
+                    delivery.getEndpointId(),
+                    savedEvent.getOrderingKey(),
+                    delivery.getId()
+                );
+
+                return new OutboxMessage(
+                    messageId,
+                    payload.type(),
+                    DELIVERY_REQUESTS_TOPIC,
+                    messageKey,
+                    delivery.getId(),
+                    payloadJson
+                );
+            })
+            .toList();
+
+        if (!outboxMessages.isEmpty()) {
+            outboxRepository.saveAllAndFlush(outboxMessages);
         }
 
         int attached = idempotencyRepository.attachEvent(
             tenantId,
             idempotencyKey,
-            event.getId()
+            savedEvent.getId()
         );
 
         if (attached != 1) {
@@ -119,7 +167,7 @@ public class EventService {
             );
         }
 
-        return EventIngestResponse.accepted(event, deliveries.size());
+        return EventIngestResponse.accepted(savedEvent, savedDeliveries.size());
     }
 
     private EventIngestResponse returnExistingResult(
@@ -206,5 +254,18 @@ public class EventService {
                 "metadata must be a JSON object"
             );
         }
+    }
+
+    private String createMessageKey(
+        UUID tenantId,
+        UUID endpointId,
+        String orderingKey,
+        UUID deliveryId
+    ) {
+        if (orderingKey == null || orderingKey.isBlank()) {
+            return "delivery:" + deliveryId;
+        }
+
+        return tenantId + ":" + endpointId + ":" + orderingKey;
     }
 }

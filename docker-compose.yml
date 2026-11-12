@@ -24,6 +24,12 @@ services:
       - db
     restart: unless-stopped
 
+  kafka:
+    image: apache/kafka:4.2.0
+    container_name: webhook-platform-kafka
+    ports:
+      - "9092:9092"
+
 networks:
   db:
     driver: bridge
